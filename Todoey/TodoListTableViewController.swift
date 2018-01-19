@@ -10,16 +10,23 @@ import UIKit
 
 class TodoListTableViewController: UITableViewController, UITextFieldDelegate {
     
-    var todoListArray = ["Buy oranges", "Get bread", "Go on vacations"]
+    var todoListArray : [String] = []
     var alertTextField : UITextField? = nil
     var addItemAlertAction : UIAlertAction? = nil
-    
+    let userDefault = UserDefaults.standard
     
     override func viewDidLoad() {
         super.viewDidLoad()
         // Do any additional setup after loading the view, typically from a nib.
         
-        
+        let array = userDefault.array(forKey: "todoListArray")
+        if array != nil{
+            todoListArray = array as! [String]
+            tableView.reloadData()
+        }
+        else{
+            print("No data stored")
+        }
     }
 
     override func didReceiveMemoryWarning() {
@@ -84,6 +91,7 @@ class TodoListTableViewController: UITableViewController, UITextFieldDelegate {
         let addItemAction = UIAlertAction(title: "Add Item", style: .default) { (alertAction) in
             print("Add item selected in alert - Text = "+self.alertTextField!.text!)
             self.todoListArray.append(self.alertTextField!.text!)
+            self.userDefault.setValue(self.todoListArray, forKey: "todoListArray")
             alert.dismiss(animated: true, completion: nil)
             self.tableView.reloadData()
         }
