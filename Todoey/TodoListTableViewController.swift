@@ -8,13 +8,18 @@
 
 import UIKit
 
-class TodoListTableViewController: UITableViewController {
+class TodoListTableViewController: UITableViewController, UITextFieldDelegate {
     
     var todoListArray = ["Buy oranges", "Get bread", "Go on vacations"]
-
+    var alertTextField : UITextField? = nil
+    var addItemAlertAction : UIAlertAction? = nil
+    
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         // Do any additional setup after loading the view, typically from a nib.
+        
+        
     }
 
     override func didReceiveMemoryWarning() {
@@ -45,11 +50,6 @@ class TodoListTableViewController: UITableViewController {
     }
     
     
-    
-    
-    
-    
-    
     ///////////////////////////////////////////
     
     //MARK: - TableView Delegate Methods
@@ -68,8 +68,69 @@ class TodoListTableViewController: UITableViewController {
     }
     
     
+    ///////////////////////////////////////////
     
+    //MARK: - Header Bar + Button management
+    
+    
+    @IBAction func addItemButtonPressed(_ sender: UIBarButtonItem) {
+        
+        let alert = UIAlertController(title: "Add item", message: "", preferredStyle: .alert)
+        
+        let cancelAction = UIAlertAction(title: "Cancel", style: .cancel) { (alertAction) in
+            alert.dismiss(animated: true, completion: nil)
+        }
+        
+        let addItemAction = UIAlertAction(title: "Add Item", style: .default) { (alertAction) in
+            print("Add item selected in alert - Text = "+self.alertTextField!.text!)
+            self.todoListArray.append(self.alertTextField!.text!)
+            alert.dismiss(animated: true, completion: nil)
+            self.tableView.reloadData()
+        }
+        
+        self.addItemAlertAction = addItemAction
+        
+        alert.addAction(cancelAction)
+        alert.addAction(addItemAction)
+        
+        
+        alert.addTextField { (alertTextField) in
+            alertTextField.placeholder = "New item"
+            alertTextField.delegate = self
+            
+            self.alertTextField = alertTextField
+
+            //Registering to the event editingChange
+            //alertTextField.addTarget(self, action: #selector(self.alertTextFieldEditingChanged(textField: alertTextField)), for: .editingChanged)
+            alertTextField.addTarget(self, action: #selector(self.alertTextFieldEditingChanged), for: .editingChanged)
+            
+        }
+        
+        addItemAction.isEnabled = false
+        present(alert, animated: true, completion: nil)
+    }
+    
+    
+   
+    //Manages the enable/disable state of the Send button:
+    @objc func alertTextFieldEditingChanged() {
+        
+        if self.alertTextField!.text == nil{
+            self.addItemAlertAction?.isEnabled = false
+            return
+        }
+        
+        var text = self.alertTextField!.text!
+        text = text.trimmingCharacters(in: .whitespaces)
+        if text.isEmpty{
+            self.addItemAlertAction?.isEnabled = false
+            return
+        }
+        
+         self.addItemAlertAction?.isEnabled = true
+    }
     
     
 }
+
 
