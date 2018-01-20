@@ -10,25 +10,23 @@ import UIKit
 
 class TodoListTableViewController: UITableViewController, UITextFieldDelegate {
     
-    var todoListArray : [String] = []
-    var alertTextField : UITextField? = nil
-    var addItemAlertAction : UIAlertAction? = nil
-    let userDefault = UserDefaults.standard
+    var todoListArray : [ToDoItem] = []
+    var alertTextField : UITextField?
+    var addItemAlertAction : UIAlertAction?
+    var dataFilePath : URL?
     
     override func viewDidLoad() {
         super.viewDidLoad()
         // Do any additional setup after loading the view, typically from a nib.
         
-        let array = userDefault.array(forKey: "todoListArray")
-        if array != nil{
-            todoListArray = array as! [String]
-            tableView.reloadData()
-        }
-        else{
-            print("No data stored")
-        }
+        dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("item.plist")
+        
+        loadData()
     }
 
+    
+    
+    
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         // Dispose of any resources that can be recreated.
@@ -51,7 +49,9 @@ class TodoListTableViewController: UITableViewController, UITextFieldDelegate {
         
         let cell = tableView.dequeueReusableCell(withIdentifier: "todoItemCell", for: indexPath)
         
-        cell.textLabel?.text = todoListArray[indexPath.row]
+        cell.textLabel?.text = todoListArray[indexPath.row].label
+        
+        cell.accessoryType = todoListArray[indexPath.row].isSelected ? .checkmark : .none 
         
         return cell
     }
@@ -62,16 +62,15 @@ class TodoListTableViewController: UITableViewController, UITextFieldDelegate {
     //MARK: - TableView Delegate Methods
     
     override func tableView(_: UITableView, didSelectRowAt indexPath: IndexPath){
+        
+        print("Cell selected: " + self.todoListArray[indexPath.row].label)
         tableView.deselectRow(at: indexPath, animated: true)
-        print("Cell selected: " + self.todoListArray[indexPath.row])
         
-        if tableView.cellForRow(at: indexPath)?.accessoryType == .checkmark {
-           tableView.cellForRow(at: indexPath)?.accessoryType = .none
-        }
-        else{
-            tableView.cellForRow(at: indexPath)?.accessoryType = .checkmark
-        }
+        self.todoListArray[indexPath.row].isSelected = !self.todoListArray[indexPath.row].isSelected
         
+        tableView.reloadData()
+        
+        self.saveData()
     }
     
     
@@ -90,8 +89,13 @@ class TodoListTableViewController: UITableViewController, UITextFieldDelegate {
         
         let addItemAction = UIAlertAction(title: "Add Item", style: .default) { (alertAction) in
             print("Add item selected in alert - Text = "+self.alertTextField!.text!)
-            self.todoListArray.append(self.alertTextField!.text!)
-            self.userDefault.setValue(self.todoListArray, forKey: "todoListArray")
+            let item = ToDoItem()
+            item.label = self.alertTextField!.text!
+            item.isSelected = false
+            self.todoListArray.append(item)
+            
+            self.saveData()
+            
             alert.dismiss(animated: true, completion: nil)
             self.tableView.reloadData()
         }
@@ -136,6 +140,46 @@ class TodoListTableViewController: UITableViewController, UITextFieldDelegate {
         }
         
          self.addItemAlertAction?.isEnabled = true
+    }
+    
+    
+    ///////////////////////////////////////////
+    
+    //MARK: - Persistent Data Management
+    
+    func loadData(){
+        let decoder = PropertyListDecoder()
+        
+        
+        let data = try? Data(contentsOf: dataFilePath!)
+        
+        if data == nil{
+            print("No data found")
+            return
+        }
+        
+        if let array = try? decoder.decode([ToDoItem].self, from: data!) {
+            self.todoListArray = array
+            return
+        }
+        
+        print("An error occured while attempting to decode data")
+        return
+    }
+    
+    
+    func saveData(){
+        
+        let encoder = PropertyListEncoder()
+        
+        do{
+            let data = try encoder.encode(self.todoListArray)
+            try data.write(to: self.dataFilePath!)
+            
+        } catch{
+            print("An error occured while attempting to write data")
+        }
+        
     }
     
     
