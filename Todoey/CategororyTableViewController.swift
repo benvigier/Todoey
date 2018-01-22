@@ -7,17 +7,16 @@
 //
 
 import UIKit
-import CoreData
+import RealmSwift
 
 class CategororyTableViewController: UITableViewController, UITextFieldDelegate {
 
-    var categoryArray : [Category] = []
-    
+    let realm = try! Realm()
+    var categories : Results<Category>?
     var alertTextField : UITextField?
     var addItemAlertAction : UIAlertAction?
     var dataFilePath : URL?
     var lastSelectedRow = 0
-    let coreDataContext = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -51,12 +50,19 @@ class CategororyTableViewController: UITableViewController, UITextFieldDelegate 
         let addItemAction = UIAlertAction(title: "Add Category", style: .default) { (alertAction) in
             print("Add item selected in alert - Text = "+self.alertTextField!.text!)
             
-            let category = Category(context: self.coreDataContext)
+            let category = Category()
             
             category.name = self.alertTextField!.text!
-            self.categoryArray.append(category)
             
-            self.saveData()
+            //Saving the new category in the database
+            do{
+                try self.realm.write {
+                    self.realm.add(category)
+                }
+                
+            } catch{
+                    print("An error occured while attempting to saving the new category: \(error)")
+                }
             
             alert.dismiss(animated: true, completion: nil)
             self.tableView.reloadData()
@@ -114,29 +120,9 @@ class CategororyTableViewController: UITableViewController, UITextFieldDelegate 
     
 
     func loadData(){
-        
-        let request : NSFetchRequest<Category> = Category.fetchRequest()
-        
-        do{
-            try self.categoryArray = self.coreDataContext.fetch(request)
-        }
-        catch{
-            print("An error occured while attempting to read the category database: \(error)")
-        }
+     //Retrieving all objects of class Category from the Realm db
+     categories = realm.objects(Category.self)
     }
-    
-    
-    func saveData(){
-        
-        do{
-            try self.coreDataContext.save()
-            
-        } catch{
-            print("An error occured while attempting to save data : \(error)")
-        }
-        
-    }
-    
     
     
     ///////////////////////////////////////////
@@ -146,15 +132,15 @@ class CategororyTableViewController: UITableViewController, UITextFieldDelegate 
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         
-        return categoryArray.count
+        return categories?.count ?? 1
     }
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         
+        
         let cell = tableView.dequeueReusableCell(withIdentifier: "categoryCell", for: indexPath)
         
-        cell.textLabel?.text = categoryArray[indexPath.row].name
-        
+        cell.textLabel?.text = categories?[indexPath.row].name ?? "No categories available"
         return cell
     }
     
@@ -165,7 +151,10 @@ class CategororyTableViewController: UITableViewController, UITextFieldDelegate 
     
     override func tableView(_: UITableView, didSelectRowAt indexPath: IndexPath){
         
-        print("Cell selected: " + self.categoryArray[indexPath.row].name!)
+        if categories == nil{
+            return
+        }
+        print("Cell selected: " + self.categories![indexPath.row].name)
         self.lastSelectedRow = indexPath.row
         performSegue(withIdentifier: "goToItems", sender: self)
       
@@ -181,7 +170,7 @@ class CategororyTableViewController: UITableViewController, UITextFieldDelegate 
             return
         }
         let destinationVC = segue.destination as! TodoListTableViewController
-        destinationVC.selectedCategory = categoryArray[lastSelectedRow]
+        destinationVC.selectedCategory = categories![lastSelectedRow]
     }
     
 }

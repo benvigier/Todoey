@@ -2,14 +2,16 @@
 //  ToDoItem.swift
 //  Todoey
 //
-//  Created by Benjamin Vigier on 1/19/18.
+//  Created by Benjamin Vigier on 1/22/18.
 //  Copyright © 2018 Benjamin Vigier. All rights reserved.
 //
 
 import Foundation
+import RealmSwift
 
-class ToDoItem: Codable{
-    
-    var label : String = ""
-    var isSelected : Bool = false
+class ToDoItem: Object{
+    @objc dynamic var label = ""
+    @objc dynamic var isSelected : Bool = false
+    @objc dynamic var dateCreated = Date()
+    var category = LinkingObjects(fromType: Category.self, property: "items")
 }

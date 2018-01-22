@@ -7,13 +7,14 @@
 //
 
 import UIKit
-import CoreData
+import RealmSwift
 
 
 class TodoListTableViewController: UITableViewController, UITextFieldDelegate {
     
-    var fullToDoListArray : [ToDoItem] = []
-    var toDoListArrayToDisplay : [ToDoItem] = []
+    let realm = try! Realm()
+    var allItemsForSelectedCategory : Results<ToDoItem>?
+    var itemsToDisplay : Results<ToDoItem>?
     var selectedCategory : Category? {
         didSet{
             loadSelectedCategoryItems()
@@ -23,8 +24,6 @@ class TodoListTableViewController: UITableViewController, UITextFieldDelegate {
     let tapGestureRecognizer = UITapGestureRecognizer(target: self, action: #selector(tableViewTapped))
     var alertTextField : UITextField?
     var addItemAlertAction : UIAlertAction?
-    var dataFilePath : URL?
-    let coreDataContext = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
     
     
     override func viewDidLoad() {
@@ -73,16 +72,21 @@ class TodoListTableViewController: UITableViewController, UITextFieldDelegate {
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         
-        return toDoListArrayToDisplay.count
+        return itemsToDisplay?.count ?? 1
     }
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         
         let cell = tableView.dequeueReusableCell(withIdentifier: "todoItemCell", for: indexPath)
         
-        cell.textLabel?.text = toDoListArrayToDisplay[indexPath.row].label
+        cell.textLabel?.text = itemsToDisplay?[indexPath.row].label ?? "No items available"
         
-        cell.accessoryType = toDoListArrayToDisplay[indexPath.row].isSelected ? .checkmark : .none
+        if itemsToDisplay != nil{
+            cell.accessoryType = itemsToDisplay![indexPath.row].isSelected ? .checkmark : .none
+        }
+        else{
+            cell.accessoryType = .none
+        }
         
         return cell
     }
@@ -94,14 +98,24 @@ class TodoListTableViewController: UITableViewController, UITextFieldDelegate {
     
     override func tableView(_: UITableView, didSelectRowAt indexPath: IndexPath){
                 
-        print("Cell selected: " + self.toDoListArrayToDisplay[indexPath.row].label!)
+        if self.itemsToDisplay == nil{
+            return
+        }
+        
+        print("Cell selected: " + self.itemsToDisplay![indexPath.row].label)
         tableView.deselectRow(at: indexPath, animated: true)
         
-        self.toDoListArrayToDisplay[indexPath.row].isSelected = !self.toDoListArrayToDisplay[indexPath.row].isSelected
+        do{
+            try realm.write{
+                self.itemsToDisplay![indexPath.row].isSelected = !self.itemsToDisplay![indexPath.row].isSelected
+            }
+        } catch{
+            print("An error occurred while attempting to update the item in the db : \(error)")
+        }
         
         tableView.reloadData()
         
-        self.saveData()
+       // self.saveData()
     }
     
     
@@ -120,17 +134,22 @@ class TodoListTableViewController: UITableViewController, UITextFieldDelegate {
         
         let addItemAction = UIAlertAction(title: "Add Item", style: .default) { (alertAction) in
             print("Add item selected in alert - Text = "+self.alertTextField!.text!)
+  
+            //Saving the new item in the Realm db
+            do{
+                try self.realm.write {
+                    
+                    let item = ToDoItem()
+                    item.label = self.alertTextField!.text!
+                    item.isSelected = false
+                    self.selectedCategory?.items.append(item)
+                }
+            } catch{
+                print("An error occured while attempting to save the new item to the db : \(error)")
+            }
             
-            let item = ToDoItem(context: self.coreDataContext)
-                
-            item.label = self.alertTextField!.text!
-            item.isSelected = false
-            item.category = self.selectedCategory
+            self.allItemsForSelectedCategory = self.itemsToDisplay
             
-            self.toDoListArrayToDisplay.append(item)
-            self.fullToDoListArray.append(item)
-            
-            self.saveData()
             
             alert.dismiss(animated: true, completion: nil)
             self.tableView.reloadData()
@@ -149,7 +168,6 @@ class TodoListTableViewController: UITableViewController, UITextFieldDelegate {
             self.alertTextField = alertTextField
 
             //Registering to the event editingChange
-            //alertTextField.addTarget(self, action: #selector(self.alertTextFieldEditingChanged(textField: alertTextField)), for: .editingChanged)
             alertTextField.addTarget(self, action: #selector(self.alertTextFieldEditingChanged), for: .editingChanged)
             
         }
@@ -183,49 +201,14 @@ class TodoListTableViewController: UITableViewController, UITextFieldDelegate {
     
     //MARK: - Persistent Data Management
     
-    func loadAllItemsForAllCategories(){
-        
-        let request : NSFetchRequest<ToDoItem> = ToDoItem.fetchRequest()
-        
-        do{
-            try self.toDoListArrayToDisplay = self.coreDataContext.fetch(request)
-            self.fullToDoListArray = toDoListArrayToDisplay
-        }
-        catch{
-            print("An error occured while attempting to read the Item database: \(error)")
-        }
-    }
-    
-    
     func loadSelectedCategoryItems(){
         
-        let request : NSFetchRequest<ToDoItem> = ToDoItem.fetchRequest()
-        
-        request.predicate = NSPredicate(format: "category.name MATCHES %@", self.selectedCategory!.name!)
-        
-        do{
-            try self.toDoListArrayToDisplay = self.coreDataContext.fetch(request)
-            self.fullToDoListArray = toDoListArrayToDisplay
-            self.tableView.reloadData()
-        }
-        catch{
-            print("An error occured while attempting to fetch Item results from database: \(error)")
-        }
+       itemsToDisplay = selectedCategory!.items.sorted(byKeyPath: "label", ascending: true)
+       //itemsToDisplay = selectedCategory!.items.sorted(byKeyPath: "dateCreated", ascending: true)
+        allItemsForSelectedCategory = itemsToDisplay
     }
     
-    
-  
-    func saveData(){
-        
-        do{
-            try self.coreDataContext.save()
-            
-        } catch{
-            print("An error occured while attempting to save Item data : \(error)")
-        }
-        
-    }
-    
+   
     
 } // END OF CLASS
 
@@ -240,36 +223,22 @@ extension TodoListTableViewController: UISearchBarDelegate{
         let text = searchBar.text
         
         if text == nil{
-            self.toDoListArrayToDisplay = fullToDoListArray
+            itemsToDisplay = allItemsForSelectedCategory
             self.tableView.reloadData()
             return
         }
         
         if text!.trimmingCharacters(in: .whitespaces) == ""{
-            self.toDoListArrayToDisplay = fullToDoListArray
+            itemsToDisplay = allItemsForSelectedCategory
             self.tableView.reloadData()
             return
         }
         
-        let request : NSFetchRequest<ToDoItem> = ToDoItem.fetchRequest()
+        let predicate = NSPredicate(format: "label CONTAINS[cd] %@", text!)
         
-        /*let labelPredicate = NSPredicate(format: "label CONTAINS[cd] %@", text!)
-        let categoryPredicate = NSPredicate(format: "category.name MATCHES %@", self.selectedCategory!.name!)
-        let compoundPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [labelPredicate,categoryPredicate])
-        request.predicate = compoundPredicate */
-      
-        let predicate = NSPredicate(format: "label CONTAINS[cd] %@ AND category.name MATCHES %@", argumentArray: [text!,self.selectedCategory!.name!])
-        request.predicate = predicate
+        self.itemsToDisplay = itemsToDisplay!.filter(predicate)
+        self.tableView.reloadData()
         
-        request.sortDescriptors = [NSSortDescriptor(key: "label", ascending: true)]
-        
-        do{
-            try self.toDoListArrayToDisplay = self.coreDataContext.fetch(request)
-            self.tableView.reloadData()
-        }
-        catch{
-            print("An error occured while attempting to fetch results from database: \(error)")
-        }
     }
     
 
